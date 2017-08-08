@@ -9,6 +9,8 @@
 
 #include <ArduinoJson.h>          //https://github.com/bblanchon/ArduinoJson
 
+#include <PubSubClient.h>
+
 #include <Wire.h>
 #include "Adafruit_HTU21DF.h"
 
@@ -35,12 +37,19 @@ float sensorTemperature = 0;
 float sensorHumidity = 0;
 
 //define your default values here, if there are different values in config.json, they are overwritten.
-char mqtt_server[40];
-char mqtt_port[6] = "8080";
-char blynk_token[34] = "YOUR_BLYNK_TOKEN";
+char mqtt_server[40] = "iot.eclipse.org";
+char mqtt_port[6] = "1883";
+char workgroup[32] = "workgroup";
 
 //flag for saving data
 bool shouldSaveConfig = false;
+
+// MQTT
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
+long lastMsg = 0;
+char msg[50];
+int value = 0;
 
 //callback notifying us of the need to save config
 void saveConfigCallback () {
@@ -66,9 +75,6 @@ void setup() {
 
   digitalWrite(pinAlarm, HIGH);
 
-  //clean FS, for testing
-  //SPIFFS.format();
-
   //read configuration from FS json
   Serial.println("mounting FS...");
 
@@ -93,7 +99,7 @@ void setup() {
 
           strcpy(mqtt_server, json["mqtt_server"]);
           strcpy(mqtt_port, json["mqtt_port"]);
-          strcpy(blynk_token, json["blynk_token"]);
+          strcpy(workgroup, json["workgroup"]);
 
         } else {
           Serial.println("failed to load json config");
@@ -112,7 +118,7 @@ void setup() {
   // id/name placeholder/prompt default length
   WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
   WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
-  WiFiManagerParameter custom_blynk_token("blynk", "blynk token", blynk_token, 32);
+  WiFiManagerParameter custom_workgroup("workgroup", "workgroup", workgroup, 32);
 
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
@@ -120,14 +126,11 @@ void setup() {
 
   //set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
-
-  //set static ip
-  wifiManager.setSTAStaticIPConfig(IPAddress(10,0,1,99), IPAddress(10,0,1,1), IPAddress(255,255,255,0));
   
   //add all your parameters here
   wifiManager.addParameter(&custom_mqtt_server);
   wifiManager.addParameter(&custom_mqtt_port);
-  wifiManager.addParameter(&custom_blynk_token);
+  wifiManager.addParameter(&custom_workgroup);
 
   //reset settings - for testing
   //wifiManager.resetSettings();
@@ -160,7 +163,7 @@ void setup() {
   //read updated parameters
   strcpy(mqtt_server, custom_mqtt_server.getValue());
   strcpy(mqtt_port, custom_mqtt_port.getValue());
-  strcpy(blynk_token, custom_blynk_token.getValue());
+  strcpy(workgroup, custom_workgroup.getValue());
 
   //save the custom parameters to FS
   if (shouldSaveConfig) {
@@ -169,7 +172,7 @@ void setup() {
     JsonObject& json = jsonBuffer.createObject();
     json["mqtt_server"] = mqtt_server;
     json["mqtt_port"] = mqtt_port;
-    json["blynk_token"] = blynk_token;
+    json["workgroup"] = workgroup;
 
     File configFile = SPIFFS.open("/config.json", "w");
     if (!configFile) {
@@ -187,6 +190,25 @@ void setup() {
 
   // Sensors
   htu.begin();
+
+  // MQTT
+  Serial.print("MQTT Server: ");
+  Serial.println(mqtt_server);
+  Serial.print("MQTT Port: ");
+  Serial.println(mqtt_port);
+
+  int mqttPort = atoi(mqtt_port);
+  mqttClient.setServer(mqtt_server, mqttPort);
+  mqttClient.setCallback(mqttCallback);
+
+  mqttReconnect();
+
+  Serial.println("");
+  Serial.println("-----");
+  Serial.print("Device ID: ");
+  Serial.println(ESP.getChipId());
+  Serial.println("-----");
+  Serial.println("");
 }
 
 void factoryReset()
@@ -209,6 +231,9 @@ void factoryReset()
       // NOTE: the boot mode:(1,7) problem is known and only happens at the first restart after serial flashing.
       
       Serial.println("Restarting...");
+      // Clean the file system with configurations
+      SPIFFS.format();
+      // Restart the board
       ESP.restart();
     }
     else
@@ -218,6 +243,82 @@ void factoryReset()
       digitalWrite(pinAlarm, LOW);
     }
   }
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int length)
+{
+  // Convert received bytes to a string
+  char text[length];
+  for (int i = 0; i < length; i++) {
+    text[i] = (char)payload[i];
+  }
+  
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  Serial.println(text);
+
+  StaticJsonBuffer<200> jsonBuffer;
+  JsonObject& data = jsonBuffer.parseObject(text);
+  lightRed = data["red"];
+  lightGreen = data["green"];
+  lightBlue = data["blue"];
+
+  Serial.print("Red: ");
+  Serial.println(lightRed);
+    Serial.print("Green: ");
+  Serial.println(lightGreen);
+    Serial.print("Blue: ");
+  Serial.println(lightBlue);
+
+  // Set colors of RGB LED strip
+  analogWrite(pinLedRed, lightRed);
+  analogWrite(pinLedGreen, lightGreen);
+  analogWrite(pinLedBlue, lightBlue);
+}
+
+void mqttReconnect()
+{
+  int attempt = 1;
+  // Loop until we're reconnected
+  for (int attempt = 0; attempt < 3; ++attempt)
+  {
+  //while (!mqttClient.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Create a random client ID
+    //String clientId = "ESP8266Client-";
+    //clientId += String(random(0xffff), HEX);
+    String clientId = "light-controller-1";
+    // Attempt to connect
+    if (mqttClient.connect(clientId.c_str())) {
+      Serial.println("connected");
+
+      // Subscribe to MQTT topic
+      char topic[200];
+      sprintf(topic,"%s/%d/led", workgroup, ESP.getChipId());
+      mqttClient.subscribe(topic);
+      break;
+      
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+
+void publishSensorData(const char* subTopic, const char* key, const float value)
+{
+  StaticJsonBuffer<100> jsonBuffer;
+  char payload[100];
+  JsonObject& json = jsonBuffer.createObject();
+  json[key] = value;
+  json.printTo((char*)payload, json.measureLength() + 1);
+  char topic[200];
+  sprintf(topic,"%s/%d/%s", workgroup, ESP.getChipId() ,subTopic);
+  mqttClient.publish(topic, payload, true);
 }
 
 void handleHTU21D()
@@ -232,6 +333,8 @@ void handleHTU21D()
       Serial.print("Temperature: "); 
       Serial.print(sensorTemperature);
       Serial.println("C");
+
+      publishSensorData("temperature", "temperature", sensorTemperature);
     }
 
     float tempHumidity = htu.readHumidity();
@@ -241,6 +344,8 @@ void handleHTU21D()
       Serial.print("Humidity: "); 
       Serial.print(sensorHumidity);
       Serial.println("%");
+
+      publishSensorData("humidity", "humidity", sensorHumidity);
     }
   }  
 }
@@ -253,12 +358,8 @@ void handleSensors()
 void loop()
 {
   // put your main code here, to run repeatedly:
-
-  // Set colors of RGB LED strip
-  analogWrite(pinLedRed, lightRed);
-  analogWrite(pinLedGreen, lightGreen);
-  analogWrite(pinLedBlue, lightBlue);
-
+  mqttClient.loop();
+  
   unsigned long currentMillis = millis();
   if (sensorInterval <= (currentMillis - sensorPreviousMillis))
   {
