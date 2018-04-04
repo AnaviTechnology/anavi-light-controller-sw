@@ -20,7 +20,7 @@ Adafruit_HTU21DF htu = Adafruit_HTU21DF();
 const int sensorHTU21D =  0x40;
 
 // Configure pins
-const int pinAlarm = 15;
+const int pinAlarm = 16;
 const int pinButton = 0;
 const int pinLedRed = 12;
 const int pinLedGreen = 13;
@@ -260,15 +260,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
 
   StaticJsonBuffer<200> jsonBuffer;
   JsonObject& data = jsonBuffer.parseObject(text);
-  lightRed = data["red"];
-  lightGreen = data["green"];
-  lightBlue = data["blue"];
+  lightRed = ((0 <= data["red"]) && (255 >= data["red"])) ? data["red"] : 0;
+  lightGreen = ((0 <= data["green"]) && (255 >= data["green"])) ? data["green"] : 0;
+  lightBlue = ((0 <= data["blue"]) && (255 >= data["blue"])) ? data["blue"] : 0;
 
   Serial.print("Red: ");
   Serial.println(lightRed);
-    Serial.print("Green: ");
+  Serial.print("Green: ");
   Serial.println(lightGreen);
-    Serial.print("Blue: ");
+  Serial.print("Blue: ");
   Serial.println(lightBlue);
 
   // Set colors of RGB LED strip
@@ -279,18 +279,17 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
 
 void mqttReconnect()
 {
-  int attempt = 1;
   // Loop until we're reconnected
   for (int attempt = 0; attempt < 3; ++attempt)
   {
-  //while (!mqttClient.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Create a random client ID
     //String clientId = "ESP8266Client-";
     //clientId += String(random(0xffff), HEX);
     String clientId = "light-controller-1";
     // Attempt to connect
-    if (mqttClient.connect(clientId.c_str())) {
+    if (mqttClient.connect(clientId.c_str()))
+    {
       Serial.println("connected");
 
       // Subscribe to MQTT topic
@@ -299,7 +298,9 @@ void mqttReconnect()
       mqttClient.subscribe(topic);
       break;
       
-    } else {
+    }
+    else
+    {
       Serial.print("failed, rc=");
       Serial.print(mqttClient.state());
       Serial.println(" try again in 5 seconds");
@@ -359,13 +360,19 @@ void loop()
 {
   // put your main code here, to run repeatedly:
   mqttClient.loop();
+
+  // Reconnect if there is an issue with the MQTT connection
+  if (false == mqttClient.connected())
+  {
+    mqttReconnect();
+  }
   
-  unsigned long currentMillis = millis();
+  /*unsigned long currentMillis = millis();
   if (sensorInterval <= (currentMillis - sensorPreviousMillis))
   {
     sensorPreviousMillis = currentMillis;
     handleSensors();
-  }
+  }*/
   
   // Press and hold the button to reset to factory defaults
   factoryReset();
