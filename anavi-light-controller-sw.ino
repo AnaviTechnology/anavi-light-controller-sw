@@ -268,9 +268,22 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
 
   StaticJsonBuffer<200> jsonBuffer;
   JsonObject& data = jsonBuffer.parseObject(text);
-  lightRed = ((0 <= data["color"]["r"]) && (255 >= data["color"]["r"])) ? data["color"]["r"] : 0;
-  lightGreen = ((0 <= data["color"]["g"]) && (255 >= data["color"]["g"])) ? data["color"]["g"] : 0;
-  lightBlue = ((0 <= data["color"]["b"]) && (255 >= data["color"]["b"])) ? data["color"]["b"] : 0;
+  if (data.containsKey("brightness"))
+  {
+    int brightness = data["brightness"];
+    if ( (-1 < brightness) && (256 > brightness) )
+    {
+      lightRed = brightness;
+      lightGreen = brightness;
+      lightBlue = brightness;
+    }
+  }
+  else if (data.containsKey("color"))
+  {
+    lightRed = ((0 <= data["color"]["r"]) && (255 >= data["color"]["r"])) ? data["color"]["r"] : 0;
+    lightGreen = ((0 <= data["color"]["g"]) && (255 >= data["color"]["g"])) ? data["color"]["g"] : 0;
+    lightBlue = ((0 <= data["color"]["b"]) && (255 >= data["color"]["b"])) ? data["color"]["b"] : 0;
+  }
 
   Serial.print("Red: ");
   Serial.println(lightRed);
