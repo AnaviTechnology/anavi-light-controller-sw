@@ -268,9 +268,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
 
   StaticJsonBuffer<200> jsonBuffer;
   JsonObject& data = jsonBuffer.parseObject(text);
-  lightRed = ((0 <= data["red"]) && (255 >= data["red"])) ? data["red"] : 0;
-  lightGreen = ((0 <= data["green"]) && (255 >= data["green"])) ? data["green"] : 0;
-  lightBlue = ((0 <= data["blue"]) && (255 >= data["blue"])) ? data["blue"] : 0;
+  lightRed = ((0 <= data["color"]["r"]) && (255 >= data["color"]["r"])) ? data["color"]["r"] : 0;
+  lightGreen = ((0 <= data["color"]["g"]) && (255 >= data["color"]["g"])) ? data["color"]["g"] : 0;
+  lightBlue = ((0 <= data["color"]["b"]) && (255 >= data["color"]["b"])) ? data["color"]["b"] : 0;
 
   Serial.print("Red: ");
   Serial.println(lightRed);
@@ -313,7 +313,7 @@ void mqttReconnect()
 
       // Subscribe to MQTT topic
       char topic[200];
-      sprintf(topic,"%s/%s/led", workgroup, machineId);
+      sprintf(topic,"%s/action/rgbled", machineId);
       mqttClient.subscribe(topic);
       break;
       
