@@ -11,6 +11,8 @@
 
 #include <PubSubClient.h>
 
+#include <MD5Builder.h>
+
 #include <Wire.h>
 #include "Adafruit_HTU21DF.h"
 
@@ -40,6 +42,9 @@ float sensorHumidity = 0;
 char mqtt_server[40] = "iot.eclipse.org";
 char mqtt_port[6] = "1883";
 char workgroup[32] = "workgroup";
+
+//MD5 of chip ID
+char machineId[32] = "";
 
 //flag for saving data
 bool shouldSaveConfig = false;
@@ -201,12 +206,15 @@ void setup() {
   mqttClient.setServer(mqtt_server, mqttPort);
   mqttClient.setCallback(mqttCallback);
 
+  // Machine ID
+  calculateMachineId();
+
   mqttReconnect();
 
   Serial.println("");
   Serial.println("-----");
-  Serial.print("Device ID: ");
-  Serial.println(ESP.getChipId());
+  Serial.print("Machine ID: ");
+  Serial.println(machineId);
   Serial.println("-----");
   Serial.println("");
 }
@@ -277,6 +285,17 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
   analogWrite(pinLedBlue, lightBlue);
 }
 
+void calculateMachineId()
+{
+  MD5Builder md5;
+  md5.begin();
+  char chipId[25];
+  sprintf(chipId,"%d",ESP.getChipId());
+  md5.add(chipId);
+  md5.calculate();
+  md5.toString().toCharArray(machineId, 32);
+}
+
 void mqttReconnect()
 {
   // Loop until we're reconnected
@@ -294,7 +313,7 @@ void mqttReconnect()
 
       // Subscribe to MQTT topic
       char topic[200];
-      sprintf(topic,"%s/%d/led", workgroup, ESP.getChipId());
+      sprintf(topic,"%s/%s/led", workgroup, machineId);
       mqttClient.subscribe(topic);
       break;
       
