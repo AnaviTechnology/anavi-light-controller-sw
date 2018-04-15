@@ -1,3 +1,4 @@
+
 #include <FS.h>                   //this needs to be first, or it all crashes and burns...
 
 #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
@@ -20,6 +21,7 @@ Adafruit_HTU21DF htu = Adafruit_HTU21DF();
 
 //Configure supported I2C sensors
 const int sensorHTU21D =  0x40;
+const int sensorBH1750 = 0x23;
 
 // Configure pins
 const int pinAlarm = 16;
@@ -37,6 +39,7 @@ const long sensorInterval = 5000;
 
 float sensorTemperature = 0;
 float sensorHumidity = 0;
+uint16_t sensorAmbientLight = 0;
 
 //define your default values here, if there are different values in config.json, they are overwritten.
 char mqtt_server[40] = "iot.eclipse.org";
@@ -392,11 +395,54 @@ void handleHTU21D()
   }
 }
 
+void sensorWriteData(int i2cAddress, uint8_t data)
+{
+    Wire.beginTransmission(i2cAddress);
+    Wire.write(data);
+    Wire.endTransmission();
+}
+
+void handleBH1750()
+{
+  Wire.begin();
+  // Power on sensor
+  sensorWriteData(sensorBH1750, 0x01);
+  // Set mode continuously high resolution mode
+  sensorWriteData(sensorBH1750, 0x10);
+
+  uint16_t tempAmbientLight;
+
+  Wire.beginTransmission(sensorBH1750);
+  Wire.requestFrom(sensorBH1750, 2);
+  tempAmbientLight = Wire.read();
+  tempAmbientLight <<= 8;
+  tempAmbientLight |= Wire.read();
+  Wire.endTransmission();
+  // s. page 7 of datasheet for calculation
+  tempAmbientLight = tempAmbientLight/1.2;
+
+  if (1 <= abs(tempAmbientLight - sensorAmbientLight))
+  {
+    // Print new humidity value
+    sensorAmbientLight = tempAmbientLight;
+    Serial.print("Light: ");
+    Serial.print(tempAmbientLight);
+    Serial.println("Lux");
+
+    // Publish new humidity value through MQTT
+    publishSensorData("light", "light", sensorAmbientLight);
+  }
+}
+
 void handleSensors()
 {
   if (true == isSensorAvailable(sensorHTU21D))
   {
     handleHTU21D();
+  }
+  if (true == isSensorAvailable(sensorBH1750))
+  {
+    handleBH1750();
   }
 }
 
