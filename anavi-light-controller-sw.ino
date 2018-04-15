@@ -16,8 +16,11 @@
 
 #include <Wire.h>
 #include "Adafruit_HTU21DF.h"
+#include "Adafruit_APDS9960.h"
 
 Adafruit_HTU21DF htu = Adafruit_HTU21DF();
+
+Adafruit_APDS9960 apds;
 
 //Configure supported I2C sensors
 const int sensorHTU21D =  0x40;
@@ -220,6 +223,18 @@ void setup() {
   Serial.println(machineId);
   Serial.println("-----");
   Serial.println("");
+
+  setupADPS9960();
+}
+
+void setupADPS9960()
+{
+  if(apds.begin())
+  {
+    //gesture mode will be entered once proximity mode senses something close
+    apds.enableProximity(true);
+    apds.enableGesture(true);
+  }
 }
 
 void factoryReset()
@@ -353,7 +368,19 @@ void publishSensorData(const char* subTopic, const char* key, const float value)
   json[key] = value;
   json.printTo((char*)payload, json.measureLength() + 1);
   char topic[200];
-  sprintf(topic,"%s/%d/%s", workgroup, ESP.getChipId() ,subTopic);
+  sprintf(topic,"%s/%s/%s", workgroup, machineId, subTopic);
+  mqttClient.publish(topic, payload, true);
+}
+
+void publishSensorData(const char* subTopic, const char* key, const String& value)
+{
+  StaticJsonBuffer<100> jsonBuffer;
+  char payload[100];
+  JsonObject& json = jsonBuffer.createObject();
+  json[key] = value;
+  json.printTo((char*)payload, json.measureLength() + 1);
+  char topic[200];
+  sprintf(topic,"%s/%s/%s", workgroup, machineId, subTopic);
   mqttClient.publish(topic, payload, true);
 }
 
@@ -434,6 +461,37 @@ void handleBH1750()
   }
 }
 
+void detectGesture()
+{
+  //read a gesture from the device
+  uint8_t gestureCode = apds.readGesture();
+  // Skip if gesture has not been detected
+  if (0 == gestureCode)
+  {
+    return;
+  }
+  String gesture = "";
+  switch(gestureCode)
+  {
+    case APDS9960_DOWN:
+      gesture = "down";
+    break;
+    case APDS9960_UP:
+      gesture = "up";
+    break;
+    case APDS9960_LEFT:
+      gesture = "left";
+    break;
+    case APDS9960_RIGHT:
+      gesture = "right";
+    break;
+  }
+  Serial.print("Gesture: ");
+  Serial.println(gesture);
+  // Publish the detected gesture through MQTT
+  publishSensorData("gesture", "gesture", gesture);
+}
+
 void handleSensors()
 {
   if (true == isSensorAvailable(sensorHTU21D))
@@ -463,7 +521,13 @@ void loop()
     sensorPreviousMillis = currentMillis;
     handleSensors();
   }
-  
+
+  // Handle gestures at a shorter interval
+  if (true == isSensorAvailable(APDS9960_ADDRESS))
+  {
+    detectGesture();
+  }
+
   // Press and hold the button to reset to factory defaults
   factoryReset();
 }
