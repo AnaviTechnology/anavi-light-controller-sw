@@ -354,38 +354,50 @@ void publishSensorData(const char* subTopic, const char* key, const float value)
   mqttClient.publish(topic, payload, true);
 }
 
+bool isSensorAvailable(int sensorAddress)
+{
+  // Check if I2C sensor is present
+  Wire.beginTransmission(sensorAddress);
+  return (0 == Wire.endTransmission()) ? true : false;
+}
+
 void handleHTU21D()
 {
-  Wire.beginTransmission(sensorHTU21D);
-  if (0 == Wire.endTransmission())
+  // Check if temperature has changed
+  float tempTemperature = htu.readTemperature();
+  if (1 <= abs(tempTemperature - sensorTemperature))
   {
-    float tempTemperature = htu.readTemperature();
-    if (1 <= abs(tempTemperature - sensorTemperature))
-    {
-      sensorTemperature = tempTemperature;
-      Serial.print("Temperature: "); 
-      Serial.print(sensorTemperature);
-      Serial.println("C");
+    // Print new temprature value
+    sensorTemperature = tempTemperature;
+    Serial.print("Temperature: ");
+    Serial.print(sensorTemperature);
+    Serial.println("C");
 
-      publishSensorData("temperature", "temperature", sensorTemperature);
-    }
+    // Publish new temperature value through MQTT
+    publishSensorData("temperature", "temperature", sensorTemperature);
+  }
 
-    float tempHumidity = htu.readHumidity();
-    if (1 <= abs(tempHumidity - sensorHumidity))
-    {
-      sensorHumidity = tempHumidity;
-      Serial.print("Humidity: "); 
-      Serial.print(sensorHumidity);
-      Serial.println("%");
+  // Check if humidity has changed
+  float tempHumidity = htu.readHumidity();
+  if (1 <= abs(tempHumidity - sensorHumidity))
+  {
+    // Print new humidity value
+    sensorHumidity = tempHumidity;
+    Serial.print("Humidity: ");
+    Serial.print(sensorHumidity);
+    Serial.println("%");
 
-      publishSensorData("humidity", "humidity", sensorHumidity);
-    }
-  }  
+    // Publish new humidity value through MQTT
+    publishSensorData("humidity", "humidity", sensorHumidity);
+  }
 }
 
 void handleSensors()
 {
-  handleHTU21D();
+  if (true == isSensorAvailable(sensorHTU21D))
+  {
+    handleHTU21D();
+  }
 }
 
 void loop()
@@ -399,12 +411,12 @@ void loop()
     mqttReconnect();
   }
   
-  /*unsigned long currentMillis = millis();
+  unsigned long currentMillis = millis();
   if (sensorInterval <= (currentMillis - sensorPreviousMillis))
   {
     sensorPreviousMillis = currentMillis;
     handleSensors();
-  }*/
+  }
   
   // Press and hold the button to reset to factory defaults
   factoryReset();
