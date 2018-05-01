@@ -122,7 +122,8 @@ void setup() {
   }
   //end read
 
-
+  // Machine ID
+  calculateMachineId();
 
   // The extra parameters to be configured (can be either global or just in the setup)
   // After connecting, parameter.getValue() will get you the configured value
@@ -130,6 +131,10 @@ void setup() {
   WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
   WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
   WiFiManagerParameter custom_workgroup("workgroup", "workgroup", workgroup, 32);
+
+  char htmlMachineId[200];
+  sprintf(htmlMachineId,"<p style=\"color: red;\">Machine ID:</p><p><b>%s</b></p><p>Copy and save the machine ID because you will need it to control the device.</p>", machineId);
+  WiFiManagerParameter custom_text_machine_id(htmlMachineId);
 
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
@@ -142,6 +147,7 @@ void setup() {
   wifiManager.addParameter(&custom_mqtt_server);
   wifiManager.addParameter(&custom_mqtt_port);
   wifiManager.addParameter(&custom_workgroup);
+  wifiManager.addParameter(&custom_text_machine_id);
 
   //reset settings - for testing
   //wifiManager.resetSettings();
@@ -211,9 +217,6 @@ void setup() {
   int mqttPort = atoi(mqtt_port);
   mqttClient.setServer(mqtt_server, mqttPort);
   mqttClient.setCallback(mqttCallback);
-
-  // Machine ID
-  calculateMachineId();
 
   mqttReconnect();
 
