@@ -292,6 +292,26 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
 
   StaticJsonBuffer<200> jsonBuffer;
   JsonObject& data = jsonBuffer.parseObject(text);
+
+  if (data.containsKey("state"))
+  {
+    if ("OFF" == data["state"])
+    {
+      //Trurn off lights
+      lightRed = 0;
+      lightGreen = 0;
+      lightBlue = 0;
+    }
+    else
+    {
+      // Turn on to max
+      // Later will be overwritten if exact colors are provided
+      lightRed = 255;
+      lightGreen = 255;
+      lightBlue = 255;
+    }
+  }
+
   if (data.containsKey("brightness"))
   {
     int brightness = data["brightness"];
