@@ -38,7 +38,10 @@ int lightGreen = 0;
 int lightBlue = 0;
 
 unsigned long sensorPreviousMillis = 0;
-const long sensorInterval = 5000; 
+const long sensorInterval = 5000;
+
+unsigned long mqttConnectionPreviousMillis = millis();
+const long mqttConnectionInterval = 60000;
 
 float sensorTemperature = 0;
 float sensorHumidity = 0;
@@ -513,8 +516,10 @@ void loop()
   mqttClient.loop();
 
   // Reconnect if there is an issue with the MQTT connection
-  if (false == mqttClient.connected())
+  unsigned long mqttConnectionMillis = millis();
+  if ( (false == mqttClient.connected()) && (mqttConnectionInterval <= (mqttConnectionMillis - mqttConnectionPreviousMillis)) )
   {
+    mqttConnectionPreviousMillis = mqttConnectionMillis;
     mqttReconnect();
   }
   
