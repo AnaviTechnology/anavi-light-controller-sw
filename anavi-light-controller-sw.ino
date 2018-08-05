@@ -89,6 +89,12 @@ void setup() {
 
   digitalWrite(pinAlarm, HIGH);
 
+  // Turn all 3 colors of the LED strip
+  // This way the setup and testing will be easier
+  analogWrite(pinLedRed, 255);
+  analogWrite(pinLedGreen, 255);
+  analogWrite(pinLedBlue, 255);
+
   //read configuration from FS json
   Serial.println("mounting FS...");
 
