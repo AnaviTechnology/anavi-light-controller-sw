@@ -51,6 +51,9 @@ uint16_t sensorAmbientLight = 0;
 char mqtt_server[40] = "iot.eclipse.org";
 char mqtt_port[6] = "1883";
 char workgroup[32] = "workgroup";
+// MQTT username and password
+char username[20] = "";
+char password[20] = "";
 
 //MD5 of chip ID
 char machineId[32] = "";
@@ -140,6 +143,8 @@ void setup() {
   WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
   WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
   WiFiManagerParameter custom_workgroup("workgroup", "workgroup", workgroup, 32);
+  WiFiManagerParameter custom_mqtt_user("user", "username", username, 20);
+  WiFiManagerParameter custom_mqtt_pass("pass", "password", password, 20);
 
   char htmlMachineId[200];
   sprintf(htmlMachineId,"<p style=\"color: red;\">Machine ID:</p><p><b>%s</b></p><p>Copy and save the machine ID because you will need it to control the device.</p>", machineId);
@@ -156,6 +161,8 @@ void setup() {
   wifiManager.addParameter(&custom_mqtt_server);
   wifiManager.addParameter(&custom_mqtt_port);
   wifiManager.addParameter(&custom_workgroup);
+  wifiManager.addParameter(&custom_mqtt_user);
+  wifiManager.addParameter(&custom_mqtt_pass);
   wifiManager.addParameter(&custom_text_machine_id);
 
   //reset settings - for testing
@@ -190,6 +197,8 @@ void setup() {
   strcpy(mqtt_server, custom_mqtt_server.getValue());
   strcpy(mqtt_port, custom_mqtt_port.getValue());
   strcpy(workgroup, custom_workgroup.getValue());
+  strcpy(username, custom_mqtt_user.getValue());
+  strcpy(password, custom_mqtt_pass.getValue());
 
   //save the custom parameters to FS
   if (shouldSaveConfig) {
@@ -199,6 +208,8 @@ void setup() {
     json["mqtt_server"] = mqtt_server;
     json["mqtt_port"] = mqtt_port;
     json["workgroup"] = workgroup;
+    json["username"] = username;
+    json["password"] = password;
 
     File configFile = SPIFFS.open("/config.json", "w");
     if (!configFile) {
@@ -222,6 +233,17 @@ void setup() {
   Serial.println(mqtt_server);
   Serial.print("MQTT Port: ");
   Serial.println(mqtt_port);
+  // Print MQTT Username
+  Serial.print("MQTT Username: ");
+  Serial.println(username);
+  // Hide password from the log and show * instead
+  char hiddenpass[20] = "";
+  for (int charP=0; charP < strlen(password); charP++) {
+    hiddenpass[charP] = '*';
+  }
+  hiddenpass[strlen(password)] = '\0';
+  Serial.print("MQTT Password: ");
+  Serial.println(hiddenpass);
 
   int mqttPort = atoi(mqtt_port);
   mqttClient.setServer(mqtt_server, mqttPort);
