@@ -143,8 +143,8 @@ void setup() {
   WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
   WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
   WiFiManagerParameter custom_workgroup("workgroup", "workgroup", workgroup, 32);
-  WiFiManagerParameter custom_mqtt_user("user", "username", username, 20);
-  WiFiManagerParameter custom_mqtt_pass("pass", "password", password, 20);
+  WiFiManagerParameter custom_mqtt_user("user", "MQTT username", username, 20);
+  WiFiManagerParameter custom_mqtt_pass("pass", "MQTT password", password, 20);
 
   char htmlMachineId[200];
   sprintf(htmlMachineId,"<p style=\"color: red;\">Machine ID:</p><p><b>%s</b></p><p>Copy and save the machine ID because you will need it to control the device.</p>", machineId);
@@ -392,7 +392,7 @@ void mqttReconnect()
     //clientId += String(random(0xffff), HEX);
     String clientId = "light-controller-1";
     // Attempt to connect
-    if (mqttClient.connect(clientId.c_str()))
+    if (true == mqttClient.connect(clientId.c_str(), username, password))
     {
       Serial.println("connected");
 
