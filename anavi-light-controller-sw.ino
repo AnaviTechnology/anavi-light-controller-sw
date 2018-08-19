@@ -493,12 +493,10 @@ void handleBH1750()
 
   uint16_t tempAmbientLight;
 
-  Wire.beginTransmission(sensorBH1750);
   Wire.requestFrom(sensorBH1750, 2);
   tempAmbientLight = Wire.read();
   tempAmbientLight <<= 8;
   tempAmbientLight |= Wire.read();
-  Wire.endTransmission();
   // s. page 7 of datasheet for calculation
   tempAmbientLight = tempAmbientLight/1.2;
 
