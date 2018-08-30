@@ -69,11 +69,11 @@ long lastMsg = 0;
 char msg[50];
 int value = 0;
 
-char cmnd_power_topic[42];
-char cmnd_color_topic[42];
+char cmnd_power_topic[44];
+char cmnd_color_topic[44];
 
-char stat_power_topic[42];
-char stat_color_topic[42];
+char stat_power_topic[44];
+char stat_color_topic[44];
 
 //callback notifying us of the need to save config
 void saveConfigCallback ()
@@ -376,6 +376,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
             lightRed = ((0 <= r) && (255 >= r)) ? r : 0;
             lightGreen = ((0 <= g) && (255 >= g)) ? g : 0;
             lightBlue = ((0 <= b) && (255 >= b)) ? b : 0;
+            // Turn on if any of the colors is greater than 0
+            power = ( (0 < lightRed) || (0 < lightGreen) || (0 < lightBlue) );
         }
 
     }
