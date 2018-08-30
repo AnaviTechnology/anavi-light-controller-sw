@@ -310,10 +310,8 @@ void factoryReset()
 void mqttCallback(char* topic, byte* payload, unsigned int length)
 {
   // Convert received bytes to a string
-  char text[length];
-  for (int i = 0; i < length; i++) {
-    text[i] = (char)payload[i];
-  }
+  char text[length + 1];
+  snprintf(text, length + 1, "%s", payload);
   
   Serial.print("Message arrived [");
   Serial.print(topic);
