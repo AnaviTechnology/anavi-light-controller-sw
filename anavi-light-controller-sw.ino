@@ -33,9 +33,11 @@ const int pinLedRed = 12;
 const int pinLedGreen = 13;
 const int pinLedBlue = 14;
 
-int lightRed = 0;
-int lightGreen = 0;
-int lightBlue = 0;
+bool power = false;
+
+int lightRed = 255;
+int lightGreen = 255;
+int lightBlue = 255;
 
 unsigned long sensorPreviousMillis = 0;
 const long sensorInterval = 5000;
@@ -67,6 +69,12 @@ PubSubClient mqttClient(espClient);
 long lastMsg = 0;
 char msg[50];
 int value = 0;
+
+char cmnd_power_topic[42];
+char cmnd_color_topic[42];
+
+char stat_power_topic[42];
+char stat_color_topic[42];
 
 //callback notifying us of the need to save config
 void saveConfigCallback () {
@@ -138,6 +146,12 @@ void setup() {
 
   // Machine ID
   calculateMachineId();
+
+  // Set MQTT topics
+  sprintf(cmnd_power_topic, "cmnd/%s/power", machineId);
+  sprintf(cmnd_color_topic, "cmnd/%s/color", machineId);
+  sprintf(stat_power_topic, "stat/%s/power", machineId);
+  sprintf(stat_color_topic, "stat/%s/color", machineId);
 
   // The extra parameters to be configured (can be either global or just in the setup)
   // After connecting, parameter.getValue() will get you the configured value
@@ -318,44 +332,43 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
   Serial.print("] ");
   Serial.println(text);
 
-  StaticJsonBuffer<200> jsonBuffer;
-  JsonObject& data = jsonBuffer.parseObject(text);
+  if (strcmp(topic, cmnd_power_topic) == 0)
+  {
+      power = strcmp(text, "ON") == 0;
+  }
+  else if (strcmp(topic, cmnd_color_topic) == 0)
+  {
+      StaticJsonBuffer<200> jsonBuffer;
+      JsonObject& data = jsonBuffer.parseObject(text);
 
-  if (data.containsKey("state"))
-  {
-    if ("OFF" == data["state"])
-    {
-      //Trurn off lights
-      lightRed = 0;
-      lightGreen = 0;
-      lightBlue = 0;
-    }
-    else
-    {
-      // Turn on to max
-      // Later will be overwritten if exact colors are provided
-      lightRed = 255;
-      lightGreen = 255;
-      lightBlue = 255;
-    }
+      if (data.containsKey("state"))
+      {
+          power = data["state"] == "ON";
+      }
+
+      if (data.containsKey("brightness"))
+      {
+          const int brightness = data["brightness"];
+          if ( (0 <= brightness) && (255 >= brightness) )
+          {
+              lightRed = brightness;
+              lightGreen = brightness;
+              lightBlue = brightness;
+          }
+      }
+      else if (data.containsKey("color"))
+      {
+          const int r = data["color"]["r"];
+          const int g = data["color"]["g"];
+          const int b = data["color"]["b"];
+          lightRed = ((0 <= r) && (255 >= r)) ? r : 0;
+          lightGreen = ((0 <= g) && (255 >= g)) ? g : 0;
+          lightBlue = ((0 <= b) && (255 >= b)) ? b : 0;
+      }
+
   }
 
-  if (data.containsKey("brightness"))
-  {
-    int brightness = data["brightness"];
-    if ( (-1 < brightness) && (256 > brightness) )
-    {
-      lightRed = brightness;
-      lightGreen = brightness;
-      lightBlue = brightness;
-    }
-  }
-  else if (data.containsKey("color"))
-  {
-    lightRed = ((0 <= data["color"]["r"]) && (255 >= data["color"]["r"])) ? data["color"]["r"] : 0;
-    lightGreen = ((0 <= data["color"]["g"]) && (255 >= data["color"]["g"])) ? data["color"]["g"] : 0;
-    lightBlue = ((0 <= data["color"]["b"]) && (255 >= data["color"]["b"])) ? data["color"]["b"] : 0;
-  }
+  publishState();
 
   Serial.print("Red: ");
   Serial.println(lightRed);
@@ -363,11 +376,22 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
   Serial.println(lightGreen);
   Serial.print("Blue: ");
   Serial.println(lightBlue);
+  Serial.print("Power: ");
+  Serial.println(power);
 
   // Set colors of RGB LED strip
-  analogWrite(pinLedRed, lightRed);
-  analogWrite(pinLedGreen, lightGreen);
-  analogWrite(pinLedBlue, lightBlue);
+  if (power)
+  {
+      analogWrite(pinLedRed, lightRed);
+      analogWrite(pinLedGreen, lightGreen);
+      analogWrite(pinLedBlue, lightBlue);
+  }
+  else
+  {
+      analogWrite(pinLedRed, 0);
+      analogWrite(pinLedGreen, 0);
+      analogWrite(pinLedBlue, 0);
+  }
 }
 
 void calculateMachineId()
@@ -396,10 +420,9 @@ void mqttReconnect()
     {
       Serial.println("connected");
 
-      // Subscribe to MQTT topic
-      char topic[200];
-      sprintf(topic,"%s/action/rgbled", machineId);
-      mqttClient.subscribe(topic);
+      // Subscribe to MQTT topics
+      mqttClient.subscribe(cmnd_power_topic);
+      mqttClient.subscribe(cmnd_color_topic);
       break;
       
     }
@@ -412,6 +435,34 @@ void mqttReconnect()
       delay(5000);
     }
   }
+}
+
+void publishState()
+{
+    StaticJsonBuffer<100> jsonBuffer;
+    char payload[100] = {0};
+    JsonObject& json = jsonBuffer.createObject();
+    const char* state = power ? "ON" : "OFF";
+    json["state"] = state;
+
+    JsonObject& color = json.createNestedObject("color");
+    color["r"] = power ? lightRed : 0;
+    color["g"] = power ? lightGreen : 0;
+    color["b"] = power ? lightBlue : 0;
+
+    json.printTo((char*)payload, json.measureLength() + 1);
+
+    Serial.print("[");
+    Serial.print(stat_color_topic);
+    Serial.print("] ");
+    Serial.println(payload);
+    mqttClient.publish(stat_color_topic, payload, true);
+
+    Serial.print("[");
+    Serial.print(stat_power_topic);
+    Serial.print("] ");
+    Serial.println(state);
+    mqttClient.publish(stat_power_topic, state, true);
 }
 
 void publishSensorData(const char* subTopic, const char* key, const float value)
