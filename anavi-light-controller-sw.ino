@@ -240,7 +240,7 @@ void setup() {
   Serial.println(username);
   // Hide password from the log and show * instead
   char hiddenpass[20] = "";
-  for (int charP=0; charP < strlen(password); charP++) {
+  for (size_t charP=0; charP < strlen(password); charP++) {
     hiddenpass[charP] = '*';
   }
   hiddenpass[strlen(password)] = '\0';
