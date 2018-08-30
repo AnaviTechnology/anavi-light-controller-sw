@@ -123,6 +123,8 @@ void setup() {
           strcpy(mqtt_server, json["mqtt_server"]);
           strcpy(mqtt_port, json["mqtt_port"]);
           strcpy(workgroup, json["workgroup"]);
+          strcpy(username, json["username"]);
+          strcpy(password, json["password"]);
 
         } else {
           Serial.println("failed to load json config");
