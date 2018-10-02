@@ -9,7 +9,7 @@
 
 #include <ArduinoJson.h>          //https://github.com/bblanchon/ArduinoJson
 
-#include <PubSubClient.h>
+#include <PubSubClient.h>        //https://github.com/knolleary/pubsubclient
 
 #include <MD5Builder.h>
 
@@ -37,6 +37,7 @@ bool power = false;
 int lightRed = 255;
 int lightGreen = 255;
 int lightBlue = 255;
+int brightnessLevel = 255;
 
 unsigned long sensorPreviousMillis = 0;
 const long sensorInterval = 5000;
@@ -353,22 +354,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
         StaticJsonBuffer<200> jsonBuffer;
         JsonObject& data = jsonBuffer.parseObject(text);
 
-        if (data.containsKey("state"))
-        {
-            power = data["state"] == "ON";
-        }
-
-        if (data.containsKey("brightness"))
-        {
-            const int brightness = data["brightness"];
-            if ( (0 <= brightness) && (255 >= brightness) )
-            {
-                lightRed = brightness;
-                lightGreen = brightness;
-                lightBlue = brightness;
-            }
-        }
-        else if (data.containsKey("color"))
+        if (data.containsKey("color"))
         {
             const int r = data["color"]["r"];
             const int g = data["color"]["g"];
@@ -376,10 +362,24 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
             lightRed = ((0 <= r) && (255 >= r)) ? r : 0;
             lightGreen = ((0 <= g) && (255 >= g)) ? g : 0;
             lightBlue = ((0 <= b) && (255 >= b)) ? b : 0;
+            // power = ( (0 < lightRed) || (0 < lightGreen) || (0 < lightBlue) );
+        }
+        if (data.containsKey("brightness"))
+        {
+            const int brightness = data["brightness"];
+            if ( (0 <= brightness) && (255 >= brightness) )
+            {
+                setBrightness(brightness);
+            }
+        }
+        if (data.containsKey("state"))
+        {
+            power = data["state"] == "ON";
+        } else if (data.containsKey("brightness") || data.containsKey("color")) {
             // Turn on if any of the colors is greater than 0
+            // Only if *either* color or brightness have been set.
             power = ( (0 < lightRed) || (0 < lightGreen) || (0 < lightBlue) );
         }
-
     }
 
     publishState();
@@ -406,6 +406,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
         analogWrite(pinLedGreen, 0);
         analogWrite(pinLedBlue, 0);
     }
+}
+
+void setBrightness(unsigned int inputBrightness)
+{
+    unsigned int maximumBrightness = 255;
+    lightRed = (lightRed * inputBrightness) / maximumBrightness;
+    lightBlue = (lightBlue * inputBrightness) / maximumBrightness;
+    lightGreen = (lightGreen * inputBrightness) / maximumBrightness;
+    brightnessLevel = inputBrightness;
 }
 
 void calculateMachineId()
@@ -453,16 +462,19 @@ void mqttReconnect()
 
 void publishState()
 {
-    StaticJsonBuffer<100> jsonBuffer;
-    char payload[100] = {0};
+    StaticJsonBuffer<150> jsonBuffer;
+    char payload[150] = {0};
     JsonObject& json = jsonBuffer.createObject();
     const char* state = power ? "ON" : "OFF";
     json["state"] = state;
+    json["brightness"] = brightnessLevel;
 
     JsonObject& color = json.createNestedObject("color");
     color["r"] = power ? lightRed : 0;
     color["g"] = power ? lightGreen : 0;
     color["b"] = power ? lightBlue : 0;
+
+    json["brightness"] = brightnessLevel;
 
     json.printTo((char*)payload, json.measureLength() + 1);
 
@@ -507,7 +519,7 @@ bool isSensorAvailable(int sensorAddress)
 {
     // Check if I2C sensor is present
     Wire.beginTransmission(sensorAddress);
-    return (0 == Wire.endTransmission()) ? true : false;
+    return 0 == Wire.endTransmission();
 }
 
 void handleHTU21D()
@@ -611,11 +623,11 @@ void detectGesture()
 
 void handleSensors()
 {
-    if (true == isSensorAvailable(sensorHTU21D))
+    if (isSensorAvailable(sensorHTU21D))
     {
         handleHTU21D();
     }
-    if (true == isSensorAvailable(sensorBH1750))
+    if (isSensorAvailable(sensorBH1750))
     {
         handleBH1750();
     }
@@ -642,7 +654,7 @@ void loop()
     }
 
     // Handle gestures at a shorter interval
-    if (true == isSensorAvailable(APDS9960_ADDRESS))
+    if (isSensorAvailable(APDS9960_ADDRESS))
     {
         detectGesture();
     }
