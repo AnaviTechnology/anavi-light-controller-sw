@@ -37,6 +37,9 @@ bool power = false;
 int lightRed = 255;
 int lightGreen = 255;
 int lightBlue = 255;
+int currentRed = 255;
+int currentGreen = 255;
+int currentBlue = 255;
 int brightnessLevel = 255;
 
 unsigned long sensorPreviousMillis = 0;
@@ -369,9 +372,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
             const int brightness = data["brightness"];
             if ( (0 <= brightness) && (255 >= brightness) )
             {
-                setBrightness(brightness);
+                currentBrightness = brightness;
             }
         }
+        calculateBrightness(brightness);
         if (data.containsKey("state"))
         {
             power = data["state"] == "ON";
@@ -408,13 +412,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
     }
 }
 
-void setBrightness(unsigned int inputBrightness)
+void calculateBrightness()
 {
     unsigned int maximumBrightness = 255;
-    lightRed = (lightRed * inputBrightness) / maximumBrightness;
-    lightBlue = (lightBlue * inputBrightness) / maximumBrightness;
-    lightGreen = (lightGreen * inputBrightness) / maximumBrightness;
-    brightnessLevel = inputBrightness;
+    lightRed = (currentRed * brightnessLevel) / maximumBrightness;
+    lightBlue = (currentBlue * brightnessLevel) / maximumBrightness;
+    lightGreen = (currentGreen * brightnessLevel) / maximumBrightness;
 }
 
 void calculateMachineId()
