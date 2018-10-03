@@ -362,9 +362,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
             const int r = data["color"]["r"];
             const int g = data["color"]["g"];
             const int b = data["color"]["b"];
-            lightRed = ((0 <= r) && (255 >= r)) ? r : 0;
-            lightGreen = ((0 <= g) && (255 >= g)) ? g : 0;
-            lightBlue = ((0 <= b) && (255 >= b)) ? b : 0;
+            currentRed = ((0 <= r) && (255 >= r)) ? r : 0;
+            currentGreen = ((0 <= g) && (255 >= g)) ? g : 0;
+            curentBlue = ((0 <= b) && (255 >= b)) ? b : 0;
             // power = ( (0 < lightRed) || (0 < lightGreen) || (0 < lightBlue) );
         }
         if (data.containsKey("brightness"))
@@ -372,10 +372,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
             const int brightness = data["brightness"];
             if ( (0 <= brightness) && (255 >= brightness) )
             {
-                currentBrightness = brightness;
+                brightnessLevel = brightness;
             }
         }
-        calculateBrightness(brightness);
+        calculateBrightness();
         if (data.containsKey("state"))
         {
             power = data["state"] == "ON";
@@ -473,11 +473,9 @@ void publishState()
     json["brightness"] = brightnessLevel;
 
     JsonObject& color = json.createNestedObject("color");
-    color["r"] = power ? lightRed : 0;
-    color["g"] = power ? lightGreen : 0;
-    color["b"] = power ? lightBlue : 0;
-
-    json["brightness"] = brightnessLevel;
+    color["r"] = power ? currentRed : 0;
+    color["g"] = power ? currentGreen : 0;
+    color["b"] = power ? currentBlue : 0;
 
     json.printTo((char*)payload, json.measureLength() + 1);
 
