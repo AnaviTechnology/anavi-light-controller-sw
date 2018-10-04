@@ -364,8 +364,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
             const int b = data["color"]["b"];
             currentRed = ((0 <= r) && (255 >= r)) ? r : 0;
             currentGreen = ((0 <= g) && (255 >= g)) ? g : 0;
-            curentBlue = ((0 <= b) && (255 >= b)) ? b : 0;
-            // power = ( (0 < lightRed) || (0 < lightGreen) || (0 < lightBlue) );
+            currentBlue = ((0 <= b) && (255 >= b)) ? b : 0;
         }
         if (data.containsKey("brightness"))
         {
