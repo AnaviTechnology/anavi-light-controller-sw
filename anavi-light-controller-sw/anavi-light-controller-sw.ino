@@ -377,7 +377,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
         calculateBrightness();
         if (data.containsKey("state"))
         {
-            power = data["state"] == "1";
+            // Set variable power to true or false depending on the state
+            power = (data["state"] == "ON");
         } else if (data.containsKey("brightness") || data.containsKey("color")) {
             // Turn on if any of the colors is greater than 0
             // Only if *either* color or brightness have been set.
