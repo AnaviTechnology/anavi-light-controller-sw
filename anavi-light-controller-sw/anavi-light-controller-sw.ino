@@ -1,6 +1,7 @@
 #include <FS.h>                   //this needs to be first, or it all crashes and burns...
 
 #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
+#include <ArduinoOTA.h>
 
 //needed for library
 #include <DNSServer.h>
@@ -86,6 +87,43 @@ void saveConfigCallback ()
     shouldSaveConfig = true;
 }
 
+void otaStarted()
+{
+    Serial.println("OTA update started!");
+}
+
+void otaFinished()
+{
+    Serial.println("OTA update finished!");
+}
+
+void otaProgress(unsigned int progress, unsigned int total)
+{
+    Serial.printf("OTA progress: %u%%\r", (progress / (total / 100)));
+}
+
+void otaError(ota_error_t error)
+{
+    Serial.printf("Error [%u]: ", error);
+    switch (error)
+    {
+        case OTA_AUTH_ERROR:
+            Serial.println("auth failed!");
+            break;
+        case OTA_BEGIN_ERROR:
+            Serial.println("begin failed!");
+            break;
+        case OTA_CONNECT_ERROR:
+            Serial.println("connect failed!");
+            break;
+        case OTA_RECEIVE_ERROR:
+            Serial.println("receive failed!");
+            break;
+        case OTA_END_ERROR:
+            Serial.println("end failed!");
+            break;
+    }
+}
 
 void setup()
 {
@@ -255,6 +293,12 @@ void setup()
 
     Serial.println("local ip");
     Serial.println(WiFi.localIP());
+
+    ArduinoOTA.onStart(otaStarted);
+    ArduinoOTA.onEnd(otaFinished);
+    ArduinoOTA.onProgress(otaProgress);
+    ArduinoOTA.onError(otaError);
+    ArduinoOTA.begin();
 
     // Sensors
     htu.begin();
@@ -637,6 +681,8 @@ void handleSensors()
 void loop()
 {
     // put your main code here, to run repeatedly:
+    ArduinoOTA.handle();
+
     mqttClient.loop();
 
     // Reconnect if there is an issue with the MQTT connection
