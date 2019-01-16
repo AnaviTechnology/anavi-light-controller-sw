@@ -34,6 +34,9 @@ const int pinLedBlue = 14;
 
 bool power = false;
 
+int tempRed = 255;
+int tempGreen = 255;
+int tempBlue = 255;
 int lightRed = 255;
 int lightGreen = 255;
 int lightBlue = 255;
@@ -41,6 +44,10 @@ int currentRed = 255;
 int currentGreen = 255;
 int currentBlue = 255;
 int brightnessLevel = 255;
+char effect[32] = "";
+int effectPos = 0;
+unsigned long effectPreviousMillis = millis();
+const long effectsInterval = 30;
 
 unsigned long sensorPreviousMillis = 0;
 const long sensorInterval = 5000;
@@ -366,7 +373,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
             currentGreen = ((0 <= g) && (255 >= g)) ? g : 0;
             currentBlue = ((0 <= b) && (255 >= b)) ? b : 0;
         }
-        if (data.containsKey("brightness"))
+        else if (data.containsKey("brightness"))
         {
             const int brightness = data["brightness"];
             if ( (0 <= brightness) && (255 >= brightness) )
@@ -374,6 +381,17 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
                 brightnessLevel = brightness;
             }
         }
+        else if (data.containsKey("effect"))
+        {
+            if (strcmp(effect, data["effect"]) != 0)
+            {
+                strcpy(effect, data["effect"]);
+                effectPos = 0;
+                effectPreviousMillis = millis();
+            }
+           
+        }
+        saveColors();
         calculateBrightness();
         if (data.containsKey("state"))
         {
@@ -400,6 +418,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
     // Set colors of RGB LED strip
     if (power)
     {
+        if (strcmp(effect, "switch_transition") == 0)
+        {
+            effectPos = 0;
+            return;
+        }
         analogWrite(pinLedRed, lightRed);
         analogWrite(pinLedGreen, lightGreen);
         analogWrite(pinLedBlue, lightBlue);
@@ -412,12 +435,191 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
     }
 }
 
+void saveColors()
+{
+    tempRed = lightRed;
+    tempGreen = lightGreen;
+    tempBlue = lightBlue;
+}
+
 void calculateBrightness()
 {
     unsigned int maximumBrightness = 255;
     lightRed = (currentRed * brightnessLevel) / maximumBrightness;
     lightBlue = (currentBlue * brightnessLevel) / maximumBrightness;
     lightGreen = (currentGreen * brightnessLevel) / maximumBrightness;
+}
+
+void processEffects()
+{
+    if (!power)
+    {
+        return;
+    }
+
+    if (strcmp(effect, "none") == 0)
+    {
+        return;
+    }
+    else if (strcmp(effect, "switch_transition") == 0)
+    {
+        if (effectPos == 256)
+        {
+            return;
+        }
+
+        if (lightRed > tempRed)
+        {
+            tempRed++;
+        }
+        else if (lightRed < tempRed) {
+            tempRed--;
+        }
+
+        if (lightGreen > tempGreen)
+        {
+            tempGreen++;
+        }
+        else if (lightGreen < tempGreen) {
+            tempGreen--;
+        }
+
+        if (lightBlue > tempBlue)
+        {
+            tempBlue++;
+        }
+        else if (lightBlue < tempBlue) {
+            tempBlue--;
+        }
+
+        effectPos += 1;
+    
+        analogWrite(pinLedRed, tempRed);
+        analogWrite(pinLedGreen, tempGreen);
+        analogWrite(pinLedBlue, tempBlue);
+
+        return;
+    }
+    else if (strcmp(effect, "rainbow1") == 0)
+    {
+        int pos = effectPos;
+        if  (pos < 256)
+        {
+            currentRed = pos;
+            currentGreen = 255 - pos;
+            currentBlue = 0;
+        }
+        else if (pos < 512)
+        {
+            currentRed = 255 - (pos - 256);
+            currentGreen = 0;
+            currentBlue = pos - 256;
+        }
+        else
+        {
+            currentRed = 0;
+            currentGreen = pos - 512;
+            currentBlue = 255 - (pos - 512);
+        }
+
+        effectPos += 1;
+        if (effectPos == 766) // 255 * 3 + 1
+        {
+            effectPos = 0;
+        }
+        
+        calculateBrightness();
+    }
+    else if (strcmp(effect, "rainbow2") == 0)
+    {
+        int pos = effectPos;
+        if  (pos < 256)
+        {
+            currentRed = 0;
+            currentGreen = 255 - pos;
+            currentBlue = pos;
+        }
+        else if (pos < 512)
+        {
+            currentRed = pos - 256;
+            currentGreen = 0;
+            currentBlue = 255 - (pos - 256);
+        }
+        else
+        {
+            currentRed = 255 - (pos - 512);
+            currentGreen = pos - 512;
+            currentBlue = 0;
+        }
+
+        effectPos += 1;
+        if (effectPos == 766)
+        {
+            effectPos = 0;
+        }
+    }
+    else if (strcmp(effect, "rainbow3") == 0)
+    {
+        int pos = effectPos;
+        if  (pos < 256)
+        {
+            currentRed = pos;
+            currentGreen = 255 - pos;
+            currentBlue = 255;
+        }
+        else if (pos < 512)
+        {
+            currentRed = 255;
+            currentGreen = pos - 256;
+            currentBlue = 255 - (pos - 256);
+        }
+        else
+        {
+            currentRed = 255 - (pos - 512);
+            currentGreen = 255;
+            currentBlue = pos - 512;
+        }
+
+        effectPos += 1;
+        if (effectPos == 766) // 255 * 3 + 1
+        {
+            effectPos = 0;
+        }
+    }
+    else if (strcmp(effect, "rainbow4") == 0)
+    {
+        int pos = effectPos;
+        if  (pos < 256)
+        {
+            currentRed = 255 - pos;
+            currentGreen = pos;
+            currentBlue = 255;
+        }
+        else if (pos < 512)
+        {
+            currentRed = pos - 256;
+            currentGreen = 255;
+            currentBlue = 255 - (pos - 256);
+        }
+        else
+        {
+            currentRed = 255;
+            currentGreen = 255 - (pos - 512);
+            currentBlue = pos - 512;
+        }
+
+        effectPos += 1;
+        if (effectPos == 766)
+        {
+            effectPos = 0;
+        }
+    }
+        
+    calculateBrightness();
+    
+    analogWrite(pinLedRed, lightRed);
+    analogWrite(pinLedGreen, lightGreen);
+    analogWrite(pinLedBlue, lightBlue);
 }
 
 void calculateMachineId()
@@ -471,6 +673,7 @@ void publishState()
     const char* state = power ? "ON" : "OFF";
     json["state"] = state;
     json["brightness"] = brightnessLevel;
+    json["effect"] = effect;
 
     JsonObject& color = json.createNestedObject("color");
     color["r"] = power ? currentRed : 0;
@@ -638,6 +841,13 @@ void loop()
 {
     // put your main code here, to run repeatedly:
     mqttClient.loop();
+
+    const unsigned long effectMillis = millis();
+    if (effectsInterval <= (effectMillis - effectPreviousMillis))
+    {
+        effectPreviousMillis = effectMillis;
+        processEffects();
+    }
 
     // Reconnect if there is an issue with the MQTT connection
     const unsigned long mqttConnectionMillis = millis();
