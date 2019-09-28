@@ -174,11 +174,10 @@ void setup()
                 std::unique_ptr<char[]> buf(new char[size]);
 
                 configFile.readBytes(buf.get(), size);
-                DynamicJsonBuffer jsonBuffer;
-                JsonObject& json = jsonBuffer.parseObject(buf.get());
-                json.printTo(Serial);
-                if (json.success())
+                DynamicJsonDocument json(1024);
+                if (DeserializationError::Ok == deserializeJson(json, buf.get()))
                 {
+                    serializeJson(json, Serial);
                     Serial.println("\nparsed json");
 
                     strcpy(mqtt_server, json["mqtt_server"]);
@@ -278,8 +277,7 @@ void setup()
     if (shouldSaveConfig)
     {
         Serial.println("saving config");
-        DynamicJsonBuffer jsonBuffer;
-        JsonObject& json = jsonBuffer.createObject();
+        DynamicJsonDocument json(1024);
         json["mqtt_server"] = mqtt_server;
         json["mqtt_port"] = mqtt_port;
         json["workgroup"] = workgroup;
@@ -292,8 +290,8 @@ void setup()
             Serial.println("failed to open config file for writing");
         }
 
-        json.printTo(Serial);
-        json.printTo(configFile);
+        serializeJson(json, Serial);
+        serializeJson(json, configFile);
         configFile.close();
         //end save
     }
@@ -405,8 +403,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
     }
     else if (strcmp(topic, cmnd_color_topic) == 0)
     {
-        StaticJsonBuffer<200> jsonBuffer;
-        JsonObject& data = jsonBuffer.parseObject(text);
+        StaticJsonDocument<200> data;
+        deserializeJson(data, text);
 
         if (data.containsKey("color"))
         {
@@ -711,20 +709,18 @@ void mqttReconnect()
 
 void publishState()
 {
-    StaticJsonBuffer<150> jsonBuffer;
-    char payload[150] = {0};
-    JsonObject& json = jsonBuffer.createObject();
+    DynamicJsonDocument json(1024);
     const char* state = power ? "ON" : "OFF";
     json["state"] = state;
     json["brightness"] = brightnessLevel;
     json["effect"] = effect;
 
-    JsonObject& color = json.createNestedObject("color");
-    color["r"] = power ? currentRed : 0;
-    color["g"] = power ? currentGreen : 0;
-    color["b"] = power ? currentBlue : 0;
+    json["color"]["r"] = power ? currentRed : 0;
+    json["color"]["g"] = power ? currentGreen : 0;
+    json["color"]["b"] = power ? currentBlue : 0;
 
-    json.printTo((char*)payload, json.measureLength() + 1);
+    char payload[150];
+    serializeJson(json, payload);
 
     Serial.print("[");
     Serial.print(stat_color_topic);
@@ -741,11 +737,10 @@ void publishState()
 
 void publishSensorData(const char* subTopic, const char* key, const float value)
 {
-    StaticJsonBuffer<100> jsonBuffer;
-    char payload[100];
-    JsonObject& json = jsonBuffer.createObject();
+    StaticJsonDocument<100> json;
     json[key] = value;
-    json.printTo((char*)payload, json.measureLength() + 1);
+    char payload[100];
+    serializeJson(json, payload);
     char topic[200];
     sprintf(topic,"%s/%s/%s", workgroup, machineId, subTopic);
     mqttClient.publish(topic, payload, true);
@@ -753,11 +748,10 @@ void publishSensorData(const char* subTopic, const char* key, const float value)
 
 void publishSensorData(const char* subTopic, const char* key, const String& value)
 {
-    StaticJsonBuffer<100> jsonBuffer;
-    char payload[100];
-    JsonObject& json = jsonBuffer.createObject();
+    StaticJsonDocument<100> json;
     json[key] = value;
-    json.printTo((char*)payload, json.measureLength() + 1);
+    char payload[100];
+    serializeJson(json, payload);
     char topic[200];
     sprintf(topic,"%s/%s/%s", workgroup, machineId, subTopic);
     mqttClient.publish(topic, payload, true);
