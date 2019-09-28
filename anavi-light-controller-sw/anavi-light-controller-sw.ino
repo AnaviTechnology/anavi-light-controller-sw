@@ -397,6 +397,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
     Serial.print("] ");
     Serial.println(text);
 
+    // Reset effects
+    strcpy(effect, "none");
+
     if (strcmp(topic, cmnd_power_topic) == 0)
     {
         power = strcmp(text, "ON") == 0;
@@ -439,7 +442,14 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
         {
             // Set variable power to true or false depending on the state
             power = (data["state"] == "ON");
-        } else if (data.containsKey("brightness") || data.containsKey("color")) {
+        }
+        else if (data.containsKey("effect"))
+        {
+            // Turn on the power if any effect has been specified
+            power = true;
+        }
+        else if (data.containsKey("brightness") || data.containsKey("color"))
+        {
             // Turn on if any of the colors is greater than 0
             // Only if *either* color or brightness have been set.
             power = ( (0 < lightRed) || (0 < lightGreen) || (0 < lightBlue) );
