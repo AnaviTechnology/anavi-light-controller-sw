@@ -200,6 +200,10 @@ void setup()
     }
     //end read
 
+    // Give a chance to the user to reset wrong configurations
+    // right after turning on the board
+    waitForFactoryReset();
+
     // Machine ID
     calculateMachineId();
 
@@ -352,20 +356,54 @@ void setupADPS9960()
     }
 }
 
+void waitForFactoryReset()
+{
+    Serial.println("Press button within 2 seconds for factory reset...");
+    for (int iter = 0; iter < 20; iter++)
+    {
+        digitalWrite(pinAlarm, HIGH);
+        delay(50);
+        if (false == digitalRead(pinButton))
+        {
+            factoryReset();
+            return;
+        }
+        digitalWrite(pinAlarm, LOW);
+        delay(50);
+        if (false == digitalRead(pinButton))
+        {
+            factoryReset();
+            return;
+        }
+    }
+}
+
 void factoryReset()
 {
     if (false == digitalRead(pinButton))
     {
         Serial.println("Hold the button to reset to factory defaults...");
+        bool cancel = false;
         for (int iter=0; iter<30; iter++)
         {
             digitalWrite(pinAlarm, HIGH);
             delay(100);
+            if (true == digitalRead(pinButton))
+            {
+                cancel = true;
+                break;
+            }
             digitalWrite(pinAlarm, LOW);
             delay(100);
+            if (true == digitalRead(pinButton))
+            {
+                cancel = true;
+                break;
+            }
         }
-        if (false == digitalRead(pinButton))
+        if (false == digitalRead(pinButton) && !cancel)
         {
+            digitalWrite(pinAlarm, HIGH);
             Serial.println("Disconnecting...");
             WiFi.disconnect();
 
