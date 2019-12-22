@@ -1,5 +1,13 @@
 #include <FS.h>                   //this needs to be first, or it all crashes and burns...
 
+// If HOME_ASSISTANT_DISCOVERY is defined, the ANAVI Light Controller will
+// publish MQTT messages that makes Home Assistant auto-discover the
+// device. See:p https://www.home-assistant.io/docs/mqtt/discovery/
+//
+// This feature requires PubSubClient 2.7.
+
+#define HOME_ASSISTANT_DISCOVERY 1
+
 #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
 #include <ArduinoOTA.h>
 
@@ -67,6 +75,9 @@ char workgroup[32] = "workgroup";
 // MQTT username and password
 char username[20] = "";
 char password[20] = "";
+#ifdef HOME_ASSISTANT_DISCOVERY
+char ha_name[32+1] = "";        // Make sure the machineId fits.
+#endif
 
 //MD5 of chip ID
 char machineId[32] = "";
@@ -185,7 +196,14 @@ void setup()
                     strcpy(workgroup, json["workgroup"]);
                     strcpy(username, json["username"]);
                     strcpy(password, json["password"]);
-
+#ifdef HOME_ASSISTANT_DISCOVERY
+                    {
+                        const char *s = json["ha_name"];
+                        if (!s)
+                            s = machineId;
+                        snprintf(ha_name, sizeof(ha_name), "%s", s);
+                    }
+#endif
                 }
                 else
                 {
@@ -221,6 +239,9 @@ void setup()
     WiFiManagerParameter custom_workgroup("workgroup", "workgroup", workgroup, 32);
     WiFiManagerParameter custom_mqtt_user("user", "MQTT username", username, 20);
     WiFiManagerParameter custom_mqtt_pass("pass", "MQTT password", password, 20);
+#ifdef HOME_ASSISTANT_DISCOVERY
+    WiFiManagerParameter custom_mqtt_ha_name("ha_name", "Device name for Home Assistant", ha_name, sizeof(ha_name));
+#endif
 
     char htmlMachineId[200];
     sprintf(htmlMachineId,"<p style=\"color: red;\">Machine ID:</p><p><b>%s</b></p><p>Copy and save the machine ID because you will need it to control the device.</p>", machineId);
@@ -240,6 +261,9 @@ void setup()
     wifiManager.addParameter(&custom_mqtt_user);
     wifiManager.addParameter(&custom_mqtt_pass);
     wifiManager.addParameter(&custom_text_machine_id);
+#ifdef HOME_ASSISTANT_DISCOVERY
+    wifiManager.addParameter(&custom_mqtt_ha_name);
+#endif
 
     //reset settings - for testing
     //wifiManager.resetSettings();
@@ -276,6 +300,9 @@ void setup()
     strcpy(workgroup, custom_workgroup.getValue());
     strcpy(username, custom_mqtt_user.getValue());
     strcpy(password, custom_mqtt_pass.getValue());
+#ifdef HOME_ASSISTANT_DISCOVERY
+    strcpy(ha_name, custom_mqtt_ha_name.getValue());
+#endif
 
     //save the custom parameters to FS
     if (shouldSaveConfig)
@@ -287,6 +314,9 @@ void setup()
         json["workgroup"] = workgroup;
         json["username"] = username;
         json["password"] = password;
+        #ifdef HOME_ASSISTANT_DISCOVERY
+            json["ha_name"] = ha_name;
+        #endif
 
         File configFile = SPIFFS.open("/config.json", "w");
         if (!configFile)
@@ -329,6 +359,11 @@ void setup()
     hiddenpass[strlen(password)] = '\0';
     Serial.print("MQTT Password: ");
     Serial.println(hiddenpass);
+
+#ifdef HOME_ASSISTANT_DISCOVERY
+    Serial.print("Home Assistant sensor name: ");
+    Serial.println(ha_name);
+#endif
 
     const int mqttPort = atoi(mqtt_port);
     mqttClient.setServer(mqtt_server, mqttPort);
@@ -741,6 +776,7 @@ void mqttReconnect()
             // Subscribe to MQTT topics
             mqttClient.subscribe(cmnd_power_topic);
             mqttClient.subscribe(cmnd_color_topic);
+            publishDiscoveryState();
             break;
 
         }
@@ -753,6 +789,172 @@ void mqttReconnect()
             delay(5000);
         }
     }
+}
+
+#ifdef HOME_ASSISTANT_DISCOVERY
+bool publishSensorDiscovery(const char *config_key,
+                            const char *device_class,
+                            const char *name_suffix,
+                            const char *state_topic,
+                            const char *unit,
+                            const char *value_template,
+                            bool binary = false)
+{
+    DynamicJsonDocument json(1024);
+
+    String sensorType = "sensor";
+    if (true == binary)
+    {
+        sensorType = "binary_sensor";
+    }
+    else
+    {
+        // Unit of measurement is supported only by non-binary sensors
+        json["unit_of_measurement"] = unit;
+        json["value_template"] = value_template;
+    }
+    static char topic[48 + sizeof(machineId)];
+    snprintf(topic, sizeof(topic),
+             "homeassistant/%s/%s/%s/config", sensorType.c_str(), machineId, config_key);
+
+    if (0 < strlen(device_class))
+    {
+      json["device_class"] = device_class;
+    }
+    json["name"] = String(ha_name) + " " + name_suffix;
+    json["unique_id"] = String("anavi-") + machineId + "-" + config_key;
+    json["state_topic"] = String(workgroup) + "/" + machineId + "/" + state_topic;
+
+    json["device"]["identifiers"] = machineId;
+    json["device"]["manufacturer"] = "ANAVI Technology";
+    json["device"]["model"] = "ANAVI Light Controller";
+    json["device"]["name"] = ha_name;
+    json["device"]["sw_version"] = ESP.getSketchMD5();
+
+    JsonArray connections = json["device"].createNestedArray("connections").createNestedArray();
+    connections.add("mac");
+    connections.add(WiFi.macAddress());
+
+    Serial.print("Home Assistant discovery topic: ");
+    Serial.println(topic);
+
+    int payload_len = measureJson(json);
+    if (!mqttClient.beginPublish(topic, payload_len, true))
+    {
+        Serial.println("beginPublish failed!\n");
+        return false;
+    }
+
+    if (serializeJson(json, mqttClient) != payload_len)
+    {
+        Serial.println("writing payload: wrong size!\n");
+        return false;
+    }
+
+    if (!mqttClient.endPublish())
+    {
+        Serial.println("endPublish failed!\n");
+        return false;
+    }
+
+    return true;
+}
+
+
+bool publishLightDiscovery()
+{
+    DynamicJsonDocument json(1024);
+
+    static char topic[48 + sizeof(machineId)];
+    snprintf(topic, sizeof(topic),
+             "homeassistant/light/%s/light/config",  machineId);
+
+    json["schema"] = "json";
+    json["brightness"] = true;
+    json["rgb"] = true;
+    json["name"] = String(ha_name) + String(" ANAVI Light Controller");
+    json["unique_id"] = String("anavi-") + machineId + String("-rgb");
+    json["command_topic"] = String("cmnd/") + machineId + String("/color");
+    json["state_topic"] = String("stat/") + machineId + String("/#");
+
+    json["device"]["identifiers"] = machineId;
+    json["device"]["manufacturer"] = "ANAVI Technology";
+    json["device"]["model"] = "ANAVI Light Controller";
+    json["device"]["name"] = ha_name;
+    json["device"]["sw_version"] = ESP.getSketchMD5();
+
+    JsonArray connections = json["device"].createNestedArray("connections").createNestedArray();
+    connections.add("mac");
+    connections.add(WiFi.macAddress());
+
+    Serial.print("Home Assistant discovery topic: ");
+    Serial.println(topic);
+
+    int payload_len = measureJson(json);
+    if (!mqttClient.beginPublish(topic, payload_len, true))
+    {
+        Serial.println("beginPublish failed!\n");
+        return false;
+    }
+
+    if (serializeJson(json, mqttClient) != payload_len)
+    {
+        Serial.println("writing payload: wrong size!\n");
+        return false;
+    }
+
+    if (!mqttClient.endPublish())
+    {
+        Serial.println("endPublish failed!\n");
+        return false;
+    }
+
+    return true;
+}
+
+#endif
+
+void publishDiscoveryState()
+{
+#ifdef HOME_ASSISTANT_DISCOVERY
+
+    // Publish discovery information about the core feature
+    publishLightDiscovery();
+
+    // Publish discovery information if any I2C sensors are attached
+    static char payload[300];
+    static char topic[80];
+
+    String homeAssistantTempScale = "°C";
+
+    if (isSensorAvailable(sensorHTU21D))
+    {
+        publishSensorDiscovery("temp",
+                               "temperature",
+                               "Temperature",
+                               "temperature",
+                               homeAssistantTempScale.c_str(),
+                               "{{ value_json.temperature | round(1) }}");
+
+        publishSensorDiscovery("humidity",
+                               "humidity",
+                               "Humidity",
+                               "humidity",
+                               "%",
+                               "{{ value_json.humidity | round(0) }}");
+    }
+
+    if (isSensorAvailable(sensorBH1750))
+    {
+        publishSensorDiscovery("light",
+                       "illuminance",
+                       "Light",
+                       "light",
+                       "Lux",
+                       "{{ value_json.light }}");
+    }
+
+#endif
 }
 
 void publishState()
@@ -790,6 +992,8 @@ void publishState()
     Serial.print("] ");
     Serial.println(state);
     mqttClient.publish(stat_power_topic, state, true);
+
+    publishDiscoveryState();
 }
 
 void publishSensorData(const char* subTopic, const char* key, const float value)
