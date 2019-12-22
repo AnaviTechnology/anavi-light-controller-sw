@@ -872,6 +872,15 @@ bool publishLightDiscovery()
     json["schema"] = "json";
     json["brightness"] = true;
     json["rgb"] = true;
+    json["effect"] = true;
+    JsonArray effects = json.createNestedArray("effect_list");
+    effects.add("none");
+    effects.add("switch_transition");
+    effects.add("rainbow1");
+    effects.add("rainbow2");
+    effects.add("rainbow3");
+    effects.add("rainbow4");
+
     json["name"] = String(ha_name) + String(" ANAVI Light Controller");
     json["unique_id"] = String("anavi-") + machineId + String("-rgb");
     json["command_topic"] = String("cmnd/") + machineId + String("/color");
