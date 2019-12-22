@@ -767,6 +767,16 @@ void publishState()
     json["color"]["g"] = power ? currentGreen : 0;
     json["color"]["b"] = power ? currentBlue : 0;
 
+
+    int payloadLength = measureJson(json);
+    if (mqttClient.beginPublish(stat_color_topic, payloadLength, true))
+    {
+        if (serializeJson(json, mqttClient) == payloadLength)
+        {
+            mqttClient.endPublish();
+        }
+    }
+
     char payload[150];
     serializeJson(json, payload);
 
@@ -774,7 +784,6 @@ void publishState()
     Serial.print(stat_color_topic);
     Serial.print("] ");
     Serial.println(payload);
-    mqttClient.publish(stat_color_topic, payload, true);
 
     Serial.print("[");
     Serial.print(stat_power_topic);
