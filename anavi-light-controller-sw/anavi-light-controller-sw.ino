@@ -992,8 +992,6 @@ void publishState()
     Serial.print("] ");
     Serial.println(state);
     mqttClient.publish(stat_power_topic, state, true);
-
-    publishDiscoveryState();
 }
 
 void publishSensorData(const char* subTopic, const char* key, const float value)
