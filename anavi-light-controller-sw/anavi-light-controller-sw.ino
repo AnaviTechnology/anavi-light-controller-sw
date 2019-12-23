@@ -275,7 +275,8 @@ void setup()
     //sets timeout until configuration portal gets turned off
     //useful to make it all retry or go to sleep
     //in seconds
-    //wifiManager.setTimeout(120);
+    wifiManager.setTimeout(300);
+    digitalWrite(pinAlarm, HIGH);
 
     //fetches ssid and pass and tries to connect
     //if it does not connect it starts an access point with the specified name
@@ -283,6 +284,7 @@ void setup()
     //and goes into a blocking loop awaiting configuration
     if (!wifiManager.autoConnect("ANAVI Light Controller", ""))
     {
+        digitalWrite(pinAlarm, LOW);
         Serial.println("failed to connect and hit timeout");
         delay(3000);
         //reset and try again, or maybe put it to deep sleep
