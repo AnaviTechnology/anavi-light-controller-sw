@@ -98,6 +98,14 @@ char cmnd_color_topic[44];
 char stat_power_topic[44];
 char stat_color_topic[44];
 
+void apWiFiCallback(WiFiManager *myWiFiManager)
+{
+    String configPortalSSID = myWiFiManager->getConfigPortalSSID();
+    // Print information in the serial output
+    Serial.print("Created access point for configuration: ");
+    Serial.println(configPortalSSID);
+}
+
 //callback notifying us of the need to save config
 void saveConfigCallback ()
 {
@@ -279,10 +287,14 @@ void setup()
     digitalWrite(pinAlarm, HIGH);
 
     //fetches ssid and pass and tries to connect
-    //if it does not connect it starts an access point with the specified name
-    //here  "AutoConnectAP"
+    //if it does not connect it starts an access point
     //and goes into a blocking loop awaiting configuration
-    if (!wifiManager.autoConnect("ANAVI Light Controller", ""))
+    wifiManager.setAPCallback(apWiFiCallback);
+    // Append the last 5 character of the machine id to the access point name
+    String apId(machineId);
+    apId = apId.substring(apId.length() - 5);
+    String accessPointName = "ANAVI Light Controller " + apId;
+    if (!wifiManager.autoConnect(accessPointName.c_str(), ""))
     {
         digitalWrite(pinAlarm, LOW);
         Serial.println("failed to connect and hit timeout");
