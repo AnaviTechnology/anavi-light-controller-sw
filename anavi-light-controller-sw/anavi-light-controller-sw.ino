@@ -8,6 +8,9 @@
 
 #define HOME_ASSISTANT_DISCOVERY 1
 
+// If DEBUG is defined additional message will be printed in serial console
+#undef DEBUG
+
 #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
 #include <ArduinoOTA.h>
 
@@ -196,8 +199,13 @@ void setup()
                 DynamicJsonDocument json(1024);
                 if (DeserializationError::Ok == deserializeJson(json, buf.get()))
                 {
+#ifdef DEBUG
+                    // Content stored in the memory of the microcontroller contains
+                    // sensitive data such as username and passwords therefore
+                    // should be printed only during debugging
                     serializeJson(json, Serial);
                     Serial.println("\nparsed json");
+#endif
 
                     strcpy(mqtt_server, json["mqtt_server"]);
                     strcpy(mqtt_port, json["mqtt_port"]);
