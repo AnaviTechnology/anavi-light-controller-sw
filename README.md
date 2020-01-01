@@ -1,8 +1,10 @@
-# anavi-light-controller-sw
+# ANAVI Light Controller
 
 Open source Arduino sketch for the smart WiFi dev board [ANAVI Light Controller](https://anavi.technology/).
 
-ANAVI Light Controlloer is an ESP8266-powered, open source, Wi-Fi dev board for controlling colors of 12V RGB LED strip. It also has 3 slots for attaching I2C sensor modules for detecting temperature, humidity, light, barometric pressure, gestures, etc. 
+ANAVI Light Controller is an ESP8266-powered, open source, Wi-Fi dev board for controlling colors of 12V RGB LED strip. It also has 3 slots for attaching I2C sensor modules for detecting temperature, humidity, light, barometric pressure, gestures, etc. ANAVI Light Controller revision 1.3 has been [certified by the Open Source Hardware Association under UID BG000005](https://certification.oshwa.org/bg000005.html).
+
+For more information and to order visit [https://anavi.technology](https://anavi.technology).
 
 # User's Manual
 
