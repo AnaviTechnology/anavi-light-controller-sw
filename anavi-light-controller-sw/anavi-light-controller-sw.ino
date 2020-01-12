@@ -993,6 +993,10 @@ void publishState()
     DynamicJsonDocument json(1024);
     const char* state = power ? "ON" : "OFF";
     json["state"] = state;
+
+    char stat_power_payload[150];
+    serializeJson(json, stat_power_payload);
+
     json["brightness"] = brightnessLevel;
     json["effect"] = effect;
 
@@ -1021,8 +1025,9 @@ void publishState()
     Serial.print("[");
     Serial.print(stat_power_topic);
     Serial.print("] ");
-    Serial.println(state);
-    mqttClient.publish(stat_power_topic, state, true);
+    Serial.println(stat_power_payload);
+
+    mqttClient.publish(stat_power_topic, stat_power_payload, true);
 }
 
 void publishSensorData(const char* subTopic, const char* key, const float value)
