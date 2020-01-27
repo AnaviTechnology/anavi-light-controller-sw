@@ -160,6 +160,11 @@ void setup()
     Serial.begin(115200);
     Serial.println();
 
+    // Set PWM range 0 to 255
+    // According to the documentation the default range is to 1023:
+    // https://arduino-esp8266.readthedocs.io/en/latest/reference.html#analog-output
+    analogWriteRange(255);
+
     //LED
     pinMode(pinAlarm, OUTPUT);
     //Button
