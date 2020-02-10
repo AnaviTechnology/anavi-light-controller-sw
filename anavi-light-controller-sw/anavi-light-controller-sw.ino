@@ -787,16 +787,16 @@ void calculateMachineId()
 
 void mqttReconnect()
 {
+    // Generate unique MQTT client ID based on the machine ID
+    char clientId[23 + sizeof(machineId)];
+    snprintf(clientId, sizeof(clientId), "anavi-light-controller-%s", machineId);
+
     // Loop until we're reconnected
     for (int attempt = 0; attempt < 3; ++attempt)
     {
         Serial.print("Attempting MQTT connection...");
-        // Create a random client ID
-        //String clientId = "ESP8266Client-";
-        //clientId += String(random(0xffff), HEX);
-        const String clientId = "light-controller-1";
         // Attempt to connect
-        if (true == mqttClient.connect(clientId.c_str(), username, password))
+        if (true == mqttClient.connect(clientId, username, password))
         {
             Serial.println("connected");
 
