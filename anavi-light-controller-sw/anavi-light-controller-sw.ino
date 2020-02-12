@@ -1026,13 +1026,13 @@ void publishState()
         }
     }
 
-    char payload[150];
-    serializeJson(json, payload);
+    char stat_color_payload[150];
+    serializeJson(json, stat_color_payload);
 
     Serial.print("[");
     Serial.print(stat_color_topic);
     Serial.print("] ");
-    Serial.println(payload);
+    Serial.println(stat_color_payload);
 
 }
 
