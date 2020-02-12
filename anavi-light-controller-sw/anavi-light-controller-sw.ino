@@ -1002,13 +1002,20 @@ void publishState()
     char stat_power_payload[150];
     serializeJson(json, stat_power_payload);
 
+    Serial.print("[");
+    Serial.print(stat_power_topic);
+    Serial.print("] ");
+    Serial.println(stat_power_payload);
+
+    mqttClient.publish(stat_power_topic, stat_power_payload, true);
+
+	// Continue with the rest of the data for the colors
     json["brightness"] = brightnessLevel;
     json["effect"] = effect;
 
     json["color"]["r"] = power ? currentRed : 0;
     json["color"]["g"] = power ? currentGreen : 0;
     json["color"]["b"] = power ? currentBlue : 0;
-
 
     int payloadLength = measureJson(json);
     if (mqttClient.beginPublish(stat_color_topic, payloadLength, true))
@@ -1019,20 +1026,14 @@ void publishState()
         }
     }
 
-    char payload[150];
-    serializeJson(json, payload);
+    char stat_color_payload[150];
+    serializeJson(json, stat_color_payload);
 
     Serial.print("[");
     Serial.print(stat_color_topic);
     Serial.print("] ");
-    Serial.println(payload);
+    Serial.println(stat_color_payload);
 
-    Serial.print("[");
-    Serial.print(stat_power_topic);
-    Serial.print("] ");
-    Serial.println(stat_power_payload);
-
-    mqttClient.publish(stat_power_topic, stat_power_payload, true);
 }
 
 void publishSensorData(const char* subTopic, const char* key, const float value)
