@@ -1069,7 +1069,7 @@ void handleHTU21D()
 {
     // Check if temperature has changed
     const float tempTemperature = htu.readTemperature();
-    if (1 <= abs(tempTemperature - sensorTemperature))
+    if (0.1 <= fabs(tempTemperature - sensorTemperature))
     {
         // Print new temprature value
         sensorTemperature = tempTemperature;
