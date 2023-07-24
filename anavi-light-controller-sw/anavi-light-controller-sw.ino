@@ -46,6 +46,11 @@ const int pinLedBlue = 14;
 
 bool power = false;
 
+int consecutiveShortCycles = 0;
+bool thisCycleIsShort = true;
+const int shortCycleMaxCount = 3;
+const unsigned long shortCycleMaxMillis = 5000;
+
 int tempRed = 255;
 int tempGreen = 255;
 int tempBlue = 255;
@@ -179,10 +184,7 @@ void setup()
 
     // Lowest priority for resuming state: 100% brightness white
     strcpy(effect, "none");
-    currentRed      = 255;
-    currentGreen    = 255;
-    currentBlue     = 255;
-    brightnessLevel = 255;
+    setCurrentColorWhite();
 
     //read configuration from FS json
     Serial.println("mounting FS...");
@@ -256,8 +258,18 @@ void setup()
                     currentGreen    = json["color"]["g"];
                     currentBlue     = json["color"]["b"];
                     brightnessLevel = json["brightness"];
+
                     //since this device just received power assume it should be on
                     power = true;
+
+                    consecutiveShortCycles = json["shortCycleCount"];
+                    consecutiveShortCycles++;
+                    if (consecutiveShortCycles >= shortCycleMaxCount)
+                    {
+                        setCurrentColorWhite();
+                    }
+
+                    saveState();
                 }
                 else
                 {
@@ -353,6 +365,8 @@ void setup()
 
     //if you get here you have connected to the WiFi
     Serial.println("connected...yeey :)");
+    //publish state to server as soon as possible on boot
+    publishState();
     digitalWrite(pinAlarm, LOW);
 
     //read updated parameters
@@ -440,6 +454,14 @@ void setup()
     Serial.println("");
 
     setupADPS9960();
+}
+
+void setCurrentColorWhite() 
+{
+    currentRed      = 255;
+    currentGreen    = 255;
+    currentBlue     = 255;
+    brightnessLevel = 255;
 }
 
 void setupADPS9960()
@@ -1085,6 +1107,8 @@ void saveState()
     json["color"]["g"] = power ? currentGreen : 0;
     json["color"]["b"] = power ? currentBlue  : 0;
 
+    json["shortCycleCount"] = consecutiveShortCycles;
+
     File stateFile = SPIFFS.open("/state.json", "w");
     if (!stateFile)
     {
@@ -1248,6 +1272,14 @@ void loop()
     {
         effectPreviousMillis = effectMillis;
         processEffects();
+    }
+
+    if (thisCycleIsShort && millis() > shortCycleMaxMillis)
+    {
+        thisCycleIsShort = false;
+        consecutiveShortCycles = 0;
+        saveState();
+        publishState();
     }
 
     // Reconnect if there is an issue with the MQTT connection
