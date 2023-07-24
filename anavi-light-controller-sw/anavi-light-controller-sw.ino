@@ -46,6 +46,11 @@ const int pinLedBlue = 14;
 
 bool power = false;
 
+int consecutiveShortCycles = 0;
+bool thisCycleIsShort = true;
+const int shortCycleMaxCount = 3;
+const unsigned long shortCycleMaxMillis = 5000;
+
 int tempRed = 255;
 int tempGreen = 255;
 int tempBlue = 255;
@@ -177,11 +182,9 @@ void setup()
 
     digitalWrite(pinAlarm, HIGH);
 
-    // Turn all 3 colors of the LED strip
-    // This way the setup and testing will be easier
-    analogWrite(pinLedRed, 255);
-    analogWrite(pinLedGreen, 255);
-    analogWrite(pinLedBlue, 255);
+    // Lowest priority for resuming state: 100% brightness white
+    strcpy(effect, "none");
+    setCurrentColorWhite();
 
     //read configuration from FS json
     Serial.println("mounting FS...");
@@ -232,11 +235,54 @@ void setup()
                 }
             }
         }
+        if (SPIFFS.exists("/state.json")) {
+            //file exists, reading and loading
+            Serial.println("reading state file");
+            File stateFile = SPIFFS.open("/state.json", "r");
+            if (stateFile)
+            {
+                Serial.println("opened state file");
+                const size_t size = stateFile.size();
+                // Allocate a buffer to store contents of the file.
+                std::unique_ptr<char[]> buf(new char[size]);
+
+                stateFile.readBytes(buf.get(), size);
+                DynamicJsonDocument json(1024);
+                if (DeserializationError::Ok == deserializeJson(json, buf.get()))
+                {
+                    serializeJson(json, Serial);
+                    Serial.println("\nparsed json");
+
+                    strcpy(effect, json["effect"]);
+                    currentRed      = json["color"]["r"];
+                    currentGreen    = json["color"]["g"];
+                    currentBlue     = json["color"]["b"];
+                    brightnessLevel = json["brightness"];
+
+                    //since this device just received power assume it should be on
+                    power = true;
+
+                    consecutiveShortCycles = json["shortCycleCount"];
+                    consecutiveShortCycles++;
+                    if (consecutiveShortCycles >= shortCycleMaxCount)
+                    {
+                        setCurrentColorWhite();
+                    }
+
+                    saveState();
+                }
+                else
+                {
+                    Serial.println("failed to load json state");
+                }
+            }
+        }
     }
     else
     {
         Serial.println("failed to mount FS");
     }
+    setColorPins();
     //end read
 
     // Give a chance to the user to reset wrong configurations
@@ -319,6 +365,8 @@ void setup()
 
     //if you get here you have connected to the WiFi
     Serial.println("connected...yeey :)");
+    //publish state to server as soon as possible on boot
+    publishState();
     digitalWrite(pinAlarm, LOW);
 
     //read updated parameters
@@ -406,6 +454,14 @@ void setup()
     Serial.println("");
 
     setupADPS9960();
+}
+
+void setCurrentColorWhite() 
+{
+    currentRed      = 255;
+    currentGreen    = 255;
+    currentBlue     = 255;
+    brightnessLevel = 255;
 }
 
 void setupADPS9960()
@@ -556,7 +612,16 @@ void mqttCallback(char* topic, byte* payload, unsigned int length)
         }
     }
 
+    saveState();
+
     publishState();
+
+    setColorPins();
+}
+
+void setColorPins()
+{
+    calculateBrightness();
 
     Serial.print("Red: ");
     Serial.println(lightRed);
@@ -679,8 +744,6 @@ void processEffects()
         {
             effectPos = 0;
         }
-        
-        calculateBrightness();
     }
     else if (strcmp(effect, "rainbow2") == 0)
     {
@@ -766,12 +829,7 @@ void processEffects()
             effectPos = 0;
         }
     }
-        
-    calculateBrightness();
-    
-    analogWrite(pinLedRed, lightRed);
-    analogWrite(pinLedGreen, lightGreen);
-    analogWrite(pinLedBlue, lightBlue);
+    setColorPins();
 }
 
 void calculateMachineId()
@@ -1036,6 +1094,32 @@ void publishState()
 
 }
 
+void saveState()
+{
+    Serial.println("saving config");
+    DynamicJsonDocument json(1024);
+    const char* powerState = power ? "ON" : "OFF";
+    json["state"]      = powerState;
+    json["brightness"] = brightnessLevel;
+    json["effect"]     = effect;
+
+    json["color"]["r"] = power ? currentRed   : 0;
+    json["color"]["g"] = power ? currentGreen : 0;
+    json["color"]["b"] = power ? currentBlue  : 0;
+
+    json["shortCycleCount"] = consecutiveShortCycles;
+
+    File stateFile = SPIFFS.open("/state.json", "w");
+    if (!stateFile)
+    {
+        Serial.println("failed to open state file for writing");
+    }
+
+    serializeJson(json, Serial);
+    serializeJson(json, stateFile);
+    stateFile.close();
+}
+
 void publishSensorData(const char* subTopic, const char* key, const float value)
 {
     StaticJsonDocument<100> json;
@@ -1188,6 +1272,14 @@ void loop()
     {
         effectPreviousMillis = effectMillis;
         processEffects();
+    }
+
+    if (thisCycleIsShort && millis() > shortCycleMaxMillis)
+    {
+        thisCycleIsShort = false;
+        consecutiveShortCycles = 0;
+        saveState();
+        publishState();
     }
 
     // Reconnect if there is an issue with the MQTT connection
